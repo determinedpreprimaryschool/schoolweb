@@ -319,8 +319,8 @@ section { padding: 3rem 0; }
   gap: 1.5rem;
   grid-template-columns: 1fr;
 }
-@media (min-width: 860px) {
-  .give-grid { grid-template-columns: repeat(3, 1fr); }
+@media (min-width: 700px) {
+  .give-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .give-block {
   background: var(--color-white);
