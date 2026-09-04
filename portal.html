@@ -366,6 +366,7 @@ function smsUnits(text) {
 }
 function DeterminedSchoolApp() {
   const [tab, setTab] = useState("dashboard");
+  const lastSyncedRef = useRef({});
   const [classes, setClasses] = useState([]);
   const [pupils, setPupils] = useState([]);
   const [subjects, setSubjects] = useState(DEFAULT_SUBJECTS);
@@ -440,6 +441,7 @@ function DeterminedSchoolApp() {
       try {
         const res = await window.storage.get("school-data");
         if (res && res.value) {
+          lastSyncedRef.current["school-data"] = res.value;
           const data = JSON.parse(res.value);
           setClasses(data.classes || []);
           setPupils(data.pupils || []);
@@ -454,17 +456,24 @@ function DeterminedSchoolApp() {
       }
       try {
         const res2 = await window.storage.get("school-marks");
-        if (res2 && res2.value) setMarks(JSON.parse(res2.value));
+        if (res2 && res2.value) {
+          lastSyncedRef.current["school-marks"] = res2.value;
+          setMarks(JSON.parse(res2.value));
+        }
       } catch (e) {
       }
       try {
         const resComments = await window.storage.get("school-report-comments");
-        if (resComments && resComments.value) setReportComments(JSON.parse(resComments.value));
+        if (resComments && resComments.value) {
+          lastSyncedRef.current["school-report-comments"] = resComments.value;
+          setReportComments(JSON.parse(resComments.value));
+        }
       } catch (e) {
       }
       try {
         const res3 = await window.storage.get("school-fees");
         if (res3 && res3.value) {
+          lastSyncedRef.current["school-fees"] = res3.value;
           const feeData = JSON.parse(res3.value);
           setFeeStructure(feeData.feeStructure || []);
           setPayments(feeData.payments || []);
@@ -475,12 +484,16 @@ function DeterminedSchoolApp() {
       }
       try {
         const res4 = await window.storage.get("school-sms");
-        if (res4 && res4.value) setSmsLog(JSON.parse(res4.value) || []);
+        if (res4 && res4.value) {
+          lastSyncedRef.current["school-sms"] = res4.value;
+          setSmsLog(JSON.parse(res4.value) || []);
+        }
       } catch (e) {
       }
       try {
         const res5 = await window.storage.get("school-staff");
         if (res5 && res5.value) {
+          lastSyncedRef.current["school-staff"] = res5.value;
           const staffData = JSON.parse(res5.value);
           setTeachers(staffData.teachers || []);
           setSubjectLoads(staffData.subjectLoads || []);
@@ -493,6 +506,8 @@ function DeterminedSchoolApp() {
     const unsubs = [];
     if (window.storage && typeof window.storage.subscribe === "function") {
       unsubs.push(window.storage.subscribe("school-data", (value) => {
+        if (value === lastSyncedRef.current["school-data"]) return;
+        lastSyncedRef.current["school-data"] = value;
         try {
           const data = JSON.parse(value);
           setClasses(data.classes || []);
@@ -506,18 +521,24 @@ function DeterminedSchoolApp() {
         }
       }));
       unsubs.push(window.storage.subscribe("school-marks", (value) => {
+        if (value === lastSyncedRef.current["school-marks"]) return;
+        lastSyncedRef.current["school-marks"] = value;
         try {
           setMarks(JSON.parse(value));
         } catch (e) {
         }
       }));
       unsubs.push(window.storage.subscribe("school-report-comments", (value) => {
+        if (value === lastSyncedRef.current["school-report-comments"]) return;
+        lastSyncedRef.current["school-report-comments"] = value;
         try {
           setReportComments(JSON.parse(value));
         } catch (e) {
         }
       }));
       unsubs.push(window.storage.subscribe("school-fees", (value) => {
+        if (value === lastSyncedRef.current["school-fees"]) return;
+        lastSyncedRef.current["school-fees"] = value;
         try {
           const feeData = JSON.parse(value);
           setFeeStructure(feeData.feeStructure || []);
@@ -528,12 +549,16 @@ function DeterminedSchoolApp() {
         }
       }));
       unsubs.push(window.storage.subscribe("school-sms", (value) => {
+        if (value === lastSyncedRef.current["school-sms"]) return;
+        lastSyncedRef.current["school-sms"] = value;
         try {
           setSmsLog(JSON.parse(value) || []);
         } catch (e) {
         }
       }));
       unsubs.push(window.storage.subscribe("school-staff", (value) => {
+        if (value === lastSyncedRef.current["school-staff"]) return;
+        lastSyncedRef.current["school-staff"] = value;
         try {
           const staffData = JSON.parse(value);
           setTeachers(staffData.teachers || []);
@@ -555,11 +580,11 @@ function DeterminedSchoolApp() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
+      const str = JSON.stringify({ classes, pupils, subjects, gradeSubjects, settings, academicYear, term });
+      if (str === lastSyncedRef.current["school-data"]) return;
+      lastSyncedRef.current["school-data"] = str;
       try {
-        await window.storage.set(
-          "school-data",
-          JSON.stringify({ classes, pupils, subjects, gradeSubjects, settings, academicYear, term })
-        );
+        await window.storage.set("school-data", str);
         setSaveStatus("Saved");
         setTimeout(() => setSaveStatus(""), 1500);
       } catch (e) {
@@ -569,8 +594,11 @@ function DeterminedSchoolApp() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
+      const str = JSON.stringify(marks);
+      if (str === lastSyncedRef.current["school-marks"]) return;
+      lastSyncedRef.current["school-marks"] = str;
       try {
-        await window.storage.set("school-marks", JSON.stringify(marks));
+        await window.storage.set("school-marks", str);
       } catch (e) {
       }
     })();
@@ -578,8 +606,11 @@ function DeterminedSchoolApp() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
+      const str = JSON.stringify(reportComments);
+      if (str === lastSyncedRef.current["school-report-comments"]) return;
+      lastSyncedRef.current["school-report-comments"] = str;
       try {
-        await window.storage.set("school-report-comments", JSON.stringify(reportComments));
+        await window.storage.set("school-report-comments", str);
       } catch (e) {
       }
     })();
@@ -587,8 +618,11 @@ function DeterminedSchoolApp() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
+      const str = JSON.stringify({ feeStructure, payments, pettyCashOpening, pettyCashEntries });
+      if (str === lastSyncedRef.current["school-fees"]) return;
+      lastSyncedRef.current["school-fees"] = str;
       try {
-        await window.storage.set("school-fees", JSON.stringify({ feeStructure, payments, pettyCashOpening, pettyCashEntries }));
+        await window.storage.set("school-fees", str);
       } catch (e) {
       }
     })();
@@ -596,8 +630,11 @@ function DeterminedSchoolApp() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
+      const str = JSON.stringify(smsLog);
+      if (str === lastSyncedRef.current["school-sms"]) return;
+      lastSyncedRef.current["school-sms"] = str;
       try {
-        await window.storage.set("school-sms", JSON.stringify(smsLog));
+        await window.storage.set("school-sms", str);
       } catch (e) {
       }
     })();
@@ -605,8 +642,11 @@ function DeterminedSchoolApp() {
   useEffect(() => {
     if (!loaded) return;
     (async () => {
+      const str = JSON.stringify({ teachers, subjectLoads, salaryPayments });
+      if (str === lastSyncedRef.current["school-staff"]) return;
+      lastSyncedRef.current["school-staff"] = str;
       try {
-        await window.storage.set("school-staff", JSON.stringify({ teachers, subjectLoads, salaryPayments }));
+        await window.storage.set("school-staff", str);
       } catch (e) {
       }
     })();
