@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>{{SITE_URL}}/index.html</loc></url>
-  <url><loc>{{SITE_URL}}/about.html</loc></url>
-  <url><loc>{{SITE_URL}}/our-story.html</loc></url>
-  <url><loc>{{SITE_URL}}/academics.html</loc></url>
-  <url><loc>{{SITE_URL}}/admissions.html</loc></url>
-  <url><loc>{{SITE_URL}}/apply.html</loc></url>
-  <url><loc>{{SITE_URL}}/gallery.html</loc></url>
-  <url><loc>{{SITE_URL}}/donate.html</loc></url>
-  <url><loc>{{SITE_URL}}/contact.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/index.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/about.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/our-story.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/academics.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/admissions.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/apply.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/gallery.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/donate.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/contact.html</loc></url>
+  <url><loc>https://determinedschoollivingstone.net/portal.html</loc></url>
 </urlset>
