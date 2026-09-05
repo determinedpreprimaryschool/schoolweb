@@ -141,6 +141,7 @@ const Wallet = mkIcon("\u{1F4B0}");
 const MessageSquare = mkIcon("\u{1F4AC}");
 const Search = mkIcon("\u{1F50D}");
 const Send = mkIcon("\u27A4");
+const Download = mkIcon("\u2B07");
 const Lock = mkIcon("\u{1F512}");
 const UserCog = mkIcon("\u{1F9D1}\u200D\u{1F3EB}");
 const ArrowUpCircle = mkIcon("\u2B06");
@@ -422,6 +423,7 @@ function DeterminedSchoolApp() {
   const [globalPupilSearch, setGlobalPupilSearch] = useState("");
   const [csvSummary, setCsvSummary] = useState(null);
   const csvInputRef = useRef(null);
+  const [templateClassId, setTemplateClassId] = useState("");
   const [promoteFromClassId, setPromoteFromClassId] = useState("");
   const [promoteToClassId, setPromoteToClassId] = useState("");
   const [promoteNewClassName, setPromoteNewClassName] = useState("");
@@ -1121,7 +1123,7 @@ function DeterminedSchoolApp() {
       let added = 0, skipped = 0;
       for (let i = startIdx; i < lines.length; i++) {
         const cells = parseCsvLine(lines[i]);
-        const [name, examNumber, gender, dob, className] = cells;
+        const [name, examNumber, gender, dob, className, parentPhone] = cells;
         if (!name || !name.trim()) {
           skipped++;
           continue;
@@ -1152,6 +1154,7 @@ function DeterminedSchoolApp() {
           examNumber: (examNumber || "").trim(),
           gender: (gender || "").trim(),
           dob: (dob || "").trim(),
+          parentPhone: (parentPhone || "").trim(),
           classId
         });
         added++;
@@ -1162,6 +1165,30 @@ function DeterminedSchoolApp() {
       if (csvInputRef.current) csvInputRef.current.value = "";
     };
     reader.readAsText(file);
+  }
+  function csvCell(v) {
+    const s = v === void 0 || v === null ? "" : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function downloadPupilTemplate() {
+    const cls = classes.find((c) => c.id === templateClassId);
+    const header = ["Name", "Student Number", "Gender", "Date of Birth", "Class", "Parent Phone"];
+    const exampleRows = [
+      ["e.g. Chanda Mwansa", "", "M", "2016-04-12", cls ? cls.name : "e.g. Grade 5 A", "e.g. 0977123456"],
+      ["e.g. Bupe Banda", "", "F", "2016-09-30", cls ? cls.name : "e.g. Grade 5 A", "e.g. 0966987654"]
+    ];
+    const lines = [header, ...exampleRows].map((row) => row.map(csvCell).join(","));
+    const csvText = lines.join("\r\n");
+    const blob = new Blob([csvText], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const safeName = (cls ? cls.name : "All_Grades").replace(/[^a-z0-9]+/gi, "_");
+    a.href = url;
+    a.download = `Pupil_Registration_Template_${safeName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }
   function promotePupils() {
     if (!promoteFromClassId) return;
@@ -1939,7 +1966,7 @@ function DeterminedSchoolApp() {
       placeholder: "Search by name or student number",
       style: { flex: 1, ...inputStyle }
     }
-  )), /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 13 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Name"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Student No."), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Class"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Gender"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "DOB"))), /* @__PURE__ */ React.createElement("tbody", null, filteredGlobalPupils.map((p) => /* @__PURE__ */ React.createElement("tr", { key: p.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, p.name), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.examNumber || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, classes.find((c) => c.id === p.classId)?.name || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.gender || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.dob || "-"))), filteredGlobalPupils.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "10px 8px", color: "#999" } }, "No pupils found."))))), pupilsTabView === "csv" && /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 } }, "Bulk import pupils"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 14 } }, "Upload a CSV file with columns in this order: Name, Student Number, Gender, Date of Birth, Class. A class name that doesn't exist yet will be created automatically. Rows with a duplicate student number are skipped."), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 13 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Name"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Student No."), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Class"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Gender"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "DOB"))), /* @__PURE__ */ React.createElement("tbody", null, filteredGlobalPupils.map((p) => /* @__PURE__ */ React.createElement("tr", { key: p.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, p.name), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.examNumber || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, classes.find((c) => c.id === p.classId)?.name || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.gender || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.dob || "-"))), filteredGlobalPupils.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "10px 8px", color: "#999" } }, "No pupils found."))))), pupilsTabView === "csv" && /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 } }, "Step 1 \u2014 Download the template"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 10 } }, "Pick a grade/class and download its blank registration sheet. Give this file to the teacher for that grade \u2014 it already has the correct column headings and the class name filled in, so nothing gets mismatched when it's uploaded back."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("select", { value: templateClassId, onChange: (e) => setTemplateClassId(e.target.value), style: { ...inputStyle, minWidth: 200 } }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All grades (blank Class column)"), classes.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, classLabel(c)))), /* @__PURE__ */ React.createElement("button", { onClick: downloadPupilTemplate, style: btnStyle }, /* @__PURE__ */ React.createElement(Download, { size: 14 }), " Download Template")), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999", marginBottom: 20 } }, "No class listed yet? Create it first under Classes, then come back here."), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4, borderTop: "1px solid #eee", paddingTop: 16 } }, "Step 2 \u2014 Upload the completed sheet"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 14 } }, "Once the teacher has filled it in and saved it as CSV, upload it here. Columns must stay in this order: Name, Student Number, Gender, Date of Birth, Class, Parent Phone. Leave Student Number blank \u2014 it's assigned automatically. A class name that doesn't exist yet will be created automatically. Rows with a duplicate student number are skipped."), /* @__PURE__ */ React.createElement(
     "input",
     {
       ref: csvInputRef,
