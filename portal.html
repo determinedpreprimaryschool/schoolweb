@@ -1006,9 +1006,25 @@ function DeterminedSchoolApp() {
         body: JSON.stringify({ phoneNumbers, message: messageText })
       });
       const data = await res.json();
-      const status = res.ok && data.success
-        ? `Sent to ${phoneNumbers.length} number${phoneNumbers.length === 1 ? "" : "s"}`
-        : `Failed \u2014 ${data.error || data.details || "unknown error"}`;
+      let status;
+      if (res.ok && data.success) {
+        const total = data.totalRequested ?? phoneNumbers.length;
+        const okCount = data.successCount ?? phoneNumbers.length;
+        const invalidCount = (data.invalidNumbers || []).length;
+        if (okCount === total && invalidCount === 0) {
+          status = `Sent to ${okCount} number${okCount === 1 ? "" : "s"}`;
+        } else {
+          const parts = [`Sent to ${okCount}/${total}`];
+          const failedNumbers = (data.recipients || [])
+            .filter((r) => r.status !== "Success")
+            .map((r) => `${r.number} (${r.status})`);
+          if (failedNumbers.length) parts.push(`failed: ${failedNumbers.join(", ")}`);
+          if (invalidCount) parts.push(`${invalidCount} invalid number${invalidCount === 1 ? "" : "s"} skipped`);
+          status = parts.join(" \u2014 ");
+        }
+      } else {
+        status = `Failed \u2014 ${data.error || data.details || "unknown error"}`;
+      }
       setSmsLog([{
         id: "sms" + Date.now(),
         group: groupLabel,
