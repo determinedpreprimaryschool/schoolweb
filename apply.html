@@ -1,144 +1,196 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Apply Now | Determined Primary School, Livingstone, Zambia</title>
-<meta name="description" content="Apply for your child to join Determined Primary School in Maramba, Livingstone. Submit the form and we'll follow up on WhatsApp.">
-<link rel="canonical" href="{{SITE_URL}}/apply.html">
-<link rel="icon" href="favicon.svg" type="image/svg+xml">
-
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
-
-<meta property="og:type" content="website">
-<meta property="og:title" content="Apply Now | Determined Primary School, Livingstone, Zambia">
-<meta property="og:description" content="Apply for your child to join Determined Primary School in Maramba, Livingstone. Submit the form and we'll follow up on WhatsApp.">
-<meta property="og:url" content="{{SITE_URL}}/apply.html">
-<meta property="og:image" content="{{SITE_URL}}/images/hero-classroom.jpg">
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Apply Now | Determined Primary School, Livingstone, Zambia">
-<meta name="twitter:description" content="Apply for your child to join Determined Primary School in Maramba, Livingstone. Submit the form and we'll follow up on WhatsApp.">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Apply Online — Determined Pre-Primary School</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #F7F3EA;
+    font-family: 'Georgia', 'Iowan Old Style', serif;
+    color: #1B2A4A;
+    display: flex;
+    justify-content: center;
+    padding: 30px 16px 60px;
+  }
+  .card {
+    background: #fff;
+    border: 1px solid #e5e0d5;
+    border-radius: 12px;
+    max-width: 560px;
+    width: 100%;
+    padding: 30px 28px 34px;
+  }
+  .brand-line { color: #C89B3C; font-size: 12px; letter-spacing: 1px; font-family: system-ui, sans-serif; }
+  h1 { color: #1B2A4A; font-size: 24px; margin: 2px 0 6px; }
+  .sub { color: #777; font-family: system-ui, sans-serif; font-size: 13px; margin: 0 0 22px; line-height: 1.5; }
+  label { display: block; font-family: system-ui, sans-serif; font-size: 12px; font-weight: 600; color: #666; margin: 14px 0 6px; }
+  input, select, textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    font-size: 14px;
+    font-family: system-ui, sans-serif;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  button {
+    margin-top: 22px;
+    width: 100%;
+    background: #1B2A4A;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 13px 14px;
+    font-size: 14.5px;
+    font-family: system-ui, sans-serif;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.55; cursor: default; }
+  .msg { font-family: system-ui, sans-serif; font-size: 13px; border-radius: 8px; padding: 12px 14px; margin-top: 16px; }
+  .msg.ok { background: #EEF6EF; border: 1px solid #7CC08A; color: #2F5B3C; }
+  .msg.err { background: #FBEAEA; border: 1px solid #B25B4A; color: #7A3229; }
+  .required { color: #B25B4A; }
+</style>
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to main content</a>
-<header class="site-header">
-  <div class="header-inner">
-    <a class="logo" href="index.html">Determined Primary School
-      <span>Maramba &middot; Livingstone &middot; Zambia</span>
-    </a>
-    <button class="nav-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Open menu">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-    </button>
-    <nav class="main-nav" id="main-nav" aria-label="Primary">
-        <a href="index.html">Home</a>
-        <a href="about.html">About</a>
-        <a href="our-story.html">Our Story</a>
-        <a href="academics.html">Academics</a>
-        <a href="admissions.html">Admissions</a>
-        <a href="gallery.html">Gallery</a>
-        <a href="contact.html">Contact</a>
-        <a href="donate.html" class="nav-donate">Donate</a>
-    </nav>
-  </div>
-</header>
-<main id="main">
+<div class="card">
+  <div class="brand-line">DETERMINED PRIVATE SCHOOL &middot; LIVINGSTONE</div>
+  <h1>Apply for Admission</h1>
+  <p class="sub">Fill in your child's details below. Our office will review your application and contact you once it has been processed.</p>
 
-<section class="page-hero">
-  <div class="container">
-    <h1>Apply now</h1>
-    <p>Fill in your child's details below. We'll open WhatsApp with your information ready to send &mdash; just press send there to finish.</p>
-  </div>
-</section>
+  <form id="applyForm">
+    <label>Child's full name <span class="required">*</span></label>
+    <input id="childName" required placeholder="Surname first" />
 
-<section>
-  <div class="container" style="max-width:640px;">
-    <p class="required-note">Fields marked * are required.</p>
-    <form id="application-form" novalidate>
-      <div class="form-grid">
-        <div class="field">
-          <label for="childName">Child's full name *</label>
-          <input type="text" id="childName" name="childName" required>
-        </div>
-        <div class="field">
-          <label for="dob">Date of birth *</label>
-          <input type="date" id="dob" name="dob" required>
-        </div>
-        <div class="field">
-          <label for="grade">Grade applying for *</label>
-          <select id="grade" name="grade" required>
-            <option value="">Select a grade</option>
-            <option>Pre-primary</option>
-            <option>Grade 1</option>
-            <option>Grade 2</option>
-            <option>Grade 3</option>
-            <option>Grade 4</option>
-            <option>Grade 5</option>
-            <option>Grade 6</option>
-            <option>Grade 7</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="guardianName">Parent/guardian name *</label>
-          <input type="text" id="guardianName" name="guardianName" required>
-        </div>
-        <div class="field">
-          <label for="phone">Phone *</label>
-          <input type="tel" id="phone" name="phone" required>
-        </div>
-        <div class="field">
-          <label for="email">Email</label>
-          <input type="email" id="email" name="email">
-        </div>
-        <div class="field">
-          <label for="address">Home area/address</label>
-          <input type="text" id="address" name="address">
-        </div>
-        <div class="field">
-          <label for="message">Message</label>
-          <textarea id="message" name="message"></textarea>
-        </div>
-        <button type="submit" class="btn btn-primary">Send application via WhatsApp</button>
-        <div id="application-status" class="form-status" role="status"></div>
-      </div>
-    </form>
-  </div>
-</section>
-</main>
-<footer class="site-footer">
-  <div class="container">
-    <div class="footer-grid">
-      <div>
-        <h4>Determined Primary School</h4>
-        <p>N5/09 Namatama Extension, Maramba, Livingstone, Zambia</p>
-        <p>Nurturing confident, curious learners from pre-primary through primary.</p>
-      </div>
-      <div>
-        <h4>Contact</h4>
-        <ul class="footer-nav">
-          <li><a href="tel:+260975401997">+260 97 540 1997</a></li>
-          <li><a href="https://wa.me/260975401997" target="_blank" rel="noopener">WhatsApp us</a></li>
-          <li><a href="mailto:determinedpreprimaryschool2015@gmail.com">determinedpreprimaryschool2015@gmail.com</a></li>
-        </ul>
-      </div>
-      <div>
-        <h4>Explore</h4>
-        <ul class="footer-nav">
-          <li><a href="about.html">About the school</a></li>
-          <li><a href="admissions.html">Admissions</a></li>
-          <li><a href="donate.html">Donate</a></li>
-          <li><a href="contact.html">Contact</a></li>
-        </ul>
-      </div>
-    </div>
-    <div class="footer-bottom">
-      &copy; <span id="year"></span> Determined Primary School, Livingstone, Zambia.
-    </div>
-  </div>
-</footer>
-<script>document.getElementById('year').textContent = new Date().getFullYear();</script>
-<script src="js/main.js"></script>
+    <label>Date of birth</label>
+    <input id="dob" placeholder="e.g. 12 Mar 2020" />
+
+    <label>Gender</label>
+    <select id="gender">
+      <option value="">Select</option>
+      <option value="Male">Male</option>
+      <option value="Female">Female</option>
+    </select>
+
+    <label>Grade applying for <span class="required">*</span></label>
+    <select id="grade" required>
+      <option value="">Select grade</option>
+      <option>ECE 1</option>
+      <option>ECE 2</option>
+      <option>ECE 3</option>
+      <option>Grade 1</option>
+      <option>Grade 2</option>
+      <option>Grade 3</option>
+      <option>Grade 4</option>
+      <option>Grade 5</option>
+      <option>Grade 6</option>
+      <option>Grade 7</option>
+    </select>
+
+    <label>Parent / Guardian full name <span class="required">*</span></label>
+    <input id="parentName" required />
+
+    <label>Parent / Guardian phone <span class="required">*</span></label>
+    <input id="parentPhone" required placeholder="+260 9XX XXXXXX" />
+
+    <label>Anything else we should know? (optional)</label>
+    <textarea id="notes" placeholder="Previous school, special needs, etc."></textarea>
+
+    <button id="submitBtn" type="submit">Submit Application</button>
+  </form>
+  <div id="resultMsg"></div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAq5-S0APJuhsbDT0kohFQ49c4EnsUcd2A",
+  authDomain: "determined-school-livingstone.firebaseapp.com",
+  projectId: "determined-school-livingstone",
+  storageBucket: "determined-school-livingstone.firebasestorage.app",
+  messagingSenderId: "262491850317",
+  appId: "1:262491850317:web:2c38cf57112bb841f97e04",
+  measurementId: "G-NCK8P84XNH"
+};
+let db = null;
+try {
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.firestore();
+} catch (e) {
+  console.error("Firebase init failed", e);
+}
+
+const form = document.getElementById("applyForm");
+const submitBtn = document.getElementById("submitBtn");
+const resultMsg = document.getElementById("resultMsg");
+
+function showMsg(text, ok) {
+  resultMsg.innerHTML = "";
+  const div = document.createElement("div");
+  div.className = "msg " + (ok ? "ok" : "err");
+  div.textContent = text;
+  resultMsg.appendChild(div);
+}
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const childName = document.getElementById("childName").value.trim();
+  const dob = document.getElementById("dob").value.trim();
+  const gender = document.getElementById("gender").value;
+  const grade = document.getElementById("grade").value;
+  const parentName = document.getElementById("parentName").value.trim();
+  const parentPhone = document.getElementById("parentPhone").value.trim();
+  const notes = document.getElementById("notes").value.trim();
+
+  if (!childName || !grade || !parentName || !parentPhone) {
+    showMsg("Please fill in all required fields (marked with *).", false);
+    return;
+  }
+  if (!db) {
+    showMsg("Could not connect to the school's system right now. Please try again shortly, or call the school directly.", false);
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Submitting\u2026";
+
+  const newApplication = {
+    id: "app" + Date.now() + Math.floor(Math.random() * 1e4),
+    childName,
+    dob,
+    gender,
+    grade,
+    parentName,
+    parentPhone,
+    notes,
+    status: "pending",
+    submittedAt: Date.now()
+  };
+
+  try {
+    const docRef = db.collection("appdata").doc("school-applications");
+    let current = [];
+    const snap = await docRef.get();
+    if (snap.exists && snap.data() && snap.data().value) {
+      try { current = JSON.parse(snap.data().value) || []; } catch (e) {}
+    }
+    current.push(newApplication);
+    await docRef.set({ value: JSON.stringify(current), updatedAt: Date.now() });
+    showMsg("Application submitted successfully! The school office will review it and contact you.", true);
+    form.reset();
+    submitBtn.textContent = "Submitted";
+  } catch (err) {
+    console.error(err);
+    showMsg("Something went wrong submitting your application. Please try again, or call the school directly.", false);
+    submitBtn.disabled = false;
+    submitBtn.textContent = "Submit Application";
+  }
+});
+</script>
 </body>
 </html>

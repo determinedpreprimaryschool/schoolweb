@@ -133,6 +133,8 @@ const FileText = mkIcon("\u{1F4C4}");
 const LayoutGrid = mkIcon("\u25A6");
 const Plus = mkIcon("+");
 const Trash2 = mkIcon("\u{1F5D1}");
+const Edit3 = mkIcon("\u270F\uFE0F");
+const Inbox = mkIcon("\u{1F4E5}");
 const Save = mkIcon("\u{1F4BE}");
 const ChevronRight = mkIcon("\u203A");
 const Printer = mkIcon("\u{1F5A8}");
@@ -396,6 +398,10 @@ function DeterminedSchoolApp() {
   const [newClass, setNewClass] = useState({ grade: "", name: "" });
   const [subjectsGradePicker, setSubjectsGradePicker] = useState(GRADES[3]);
   const [newPupil, setNewPupil] = useState({ name: "", examNumber: "", gender: "", dob: "", parentPhone: "", classId: "" });
+  const [editingPupilId, setEditingPupilId] = useState(null);
+  const [pupilDupWarning, setPupilDupWarning] = useState("");
+  const [applications, setApplications] = useState([]);
+  const [appClassChoice, setAppClassChoice] = useState({});
   const [newSubject, setNewSubject] = useState("");
   const [saveStatus, setSaveStatus] = useState("");
   const [feeSubTab, setFeeSubTab] = useState("structure");
@@ -570,6 +576,14 @@ function DeterminedSchoolApp() {
         }
       } catch (e) {
       }
+      try {
+        const res6 = await window.storage.get("school-applications");
+        if (res6 && res6.value) {
+          lastSyncedRef.current["school-applications"] = res6.value;
+          setApplications(JSON.parse(res6.value) || []);
+        }
+      } catch (e) {
+      }
       setLoaded(true);
     }
     loadAllRef.current = loadAll;
@@ -638,6 +652,14 @@ function DeterminedSchoolApp() {
         } catch (e) {
         }
       }));
+      unsubs.push(window.storage.subscribe("school-applications", (value) => {
+        if (value === lastSyncedRef.current["school-applications"]) return;
+        lastSyncedRef.current["school-applications"] = value;
+        try {
+          setApplications(JSON.parse(value) || []);
+        } catch (e) {
+        }
+      }));
     }
     return () => {
       unsubs.forEach((u) => {
@@ -678,6 +700,11 @@ function DeterminedSchoolApp() {
     const str = JSON.stringify({ teachers, subjectLoads, salaryPayments });
     persistRef.current("school-staff", str);
   }, [teachers, subjectLoads, salaryPayments, loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    const str = JSON.stringify(applications);
+    persistRef.current("school-applications", str);
+  }, [applications, loaded]);
   const activeClass = classes.find((c) => c.id === activeClassId) || null;
   const classPupils = useMemo(
     () => pupils.filter((p) => p.classId === activeClassId),
@@ -734,8 +761,39 @@ function DeterminedSchoolApp() {
     });
     return prefix + String(max + 1).padStart(4, "0");
   }
+  function isDuplicatePupil(name, dob, classId, excludeId) {
+    const n = name.trim().toLowerCase();
+    if (!n) return false;
+    const d = (dob || "").trim().toLowerCase();
+    return pupils.some((p) => {
+      if (p.id === excludeId) return false;
+      const pn = p.name.trim().toLowerCase();
+      if (pn !== n) return false;
+      if (p.classId === classId) return true;
+      if (d && (p.dob || "").trim().toLowerCase() === d) return true;
+      return false;
+    });
+  }
   function addPupil() {
     if (!newPupil.name.trim() || !newPupil.classId) return;
+    setPupilDupWarning("");
+    if (isDuplicatePupil(newPupil.name, newPupil.dob, newPupil.classId, editingPupilId)) {
+      setPupilDupWarning(`${newPupil.name.trim()} appears to already be registered (same name, and same class or date of birth). Not saved as a duplicate.`);
+      return;
+    }
+    if (editingPupilId) {
+      setPupils(pupils.map((p) => p.id === editingPupilId ? {
+        ...p,
+        name: newPupil.name.trim(),
+        gender: newPupil.gender,
+        dob: newPupil.dob,
+        parentPhone: newPupil.parentPhone.trim(),
+        classId: newPupil.classId
+      } : p));
+      setEditingPupilId(null);
+      setNewPupil({ name: "", examNumber: "", gender: "", dob: "", parentPhone: "", classId: newPupil.classId });
+      return;
+    }
     const examNumber = generateExamNumber();
     const id = "p" + Date.now();
     setPupils([...pupils, {
@@ -749,8 +807,45 @@ function DeterminedSchoolApp() {
     }]);
     setNewPupil({ name: "", examNumber: "", gender: "", dob: "", parentPhone: "", classId: newPupil.classId });
   }
+  function startEditPupil(p) {
+    setEditingPupilId(p.id);
+    setPupilDupWarning("");
+    setNewPupil({ name: p.name, examNumber: p.examNumber || "", gender: p.gender || "", dob: p.dob || "", parentPhone: p.parentPhone || "", classId: p.classId });
+  }
+  function cancelEditPupil() {
+    setEditingPupilId(null);
+    setPupilDupWarning("");
+    setNewPupil({ name: "", examNumber: "", gender: "", dob: "", parentPhone: "", classId: newPupil.classId });
+  }
   function removePupil(id) {
     setPupils(pupils.filter((p) => p.id !== id));
+    if (editingPupilId === id) cancelEditPupil();
+  }
+  function classesForGrade(gradeName) {
+    return classes.filter((c) => c.grade === gradeName);
+  }
+  function approveApplication(appId, classId) {
+    const app = applications.find((a) => a.id === appId);
+    if (!app || !classId) return;
+    if (isDuplicatePupil(app.childName, app.dob, classId, null)) {
+      setApplications(applications.map((a) => a.id === appId ? { ...a, status: "duplicate", note: "Matches an existing pupil \u2014 not added automatically." } : a));
+      return;
+    }
+    const examNumber = generateExamNumber();
+    const id = "p" + Date.now();
+    setPupils([...pupils, {
+      id,
+      name: app.childName.trim(),
+      examNumber,
+      gender: app.gender || "",
+      dob: app.dob || "",
+      parentPhone: app.parentPhone || "",
+      classId
+    }]);
+    setApplications(applications.map((a) => a.id === appId ? { ...a, status: "approved", pupilId: id } : a));
+  }
+  function rejectApplication(appId) {
+    setApplications(applications.map((a) => a.id === appId ? { ...a, status: "rejected" } : a));
   }
   function addSubject() {
     if (!newSubject.trim() || subjects.includes(newSubject.trim())) return;
@@ -976,16 +1071,79 @@ function DeterminedSchoolApp() {
   );
   function recipientCount(group) {
     if (group === "all") return pupils.length;
+    if (group === "balances") return pupils.filter((p) => balanceForPupil(p, academicYear) > 1e-3).length;
     return pupils.filter((p) => p.classId === group).length;
+  }
+  function fillBalanceTemplate() {
+    setSmsMessage("Dear Parent/Guardian, this is a reminder that {name}'s school balance at Determined Pre-Primary School is currently {balance}. Kindly settle it at your earliest convenience. Thank you.");
+  }
+  async function sendPersonalizedSms(targetPupils, groupLabel, messageText) {
+    const recipients = targetPupils
+      .filter((p) => (p.parentPhone || "").trim())
+      .map((p) => ({
+        name: p.name,
+        phone: p.parentPhone.trim(),
+        message: messageText.replace(/\{name\}/g, p.name).replace(/\{balance\}/g, fmtK(balanceForPupil(p, academicYear)))
+      }));
+    if (recipients.length === 0) {
+      setSmsLog([{
+        id: "sms" + Date.now(),
+        group: groupLabel,
+        recipients: 0,
+        message: messageText,
+        units: smsUnits(messageText),
+        date: (/* @__PURE__ */ new Date()).toISOString(),
+        status: "Failed \u2014 no parent phone numbers on file for this group"
+      }, ...smsLog]);
+      return;
+    }
+    setSmsSending(true);
+    let successCount = 0;
+    const failedNames = [];
+    try {
+      for (const r of recipients) {
+        try {
+          const res = await fetch(SMS_WORKER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phoneNumbers: [r.phone], message: r.message })
+          });
+          const data = await res.json();
+          if (res.ok && data.success && (data.successCount ?? 0) >= 1) successCount++;
+          else failedNames.push(r.name);
+        } catch (e) {
+          failedNames.push(r.name);
+        }
+      }
+      const total = recipients.length;
+      let status = successCount === total
+        ? `Sent to ${successCount} parent${successCount === 1 ? "" : "s"} (personalized)`
+        : `Sent to ${successCount}/${total} (personalized)` + (failedNames.length ? ` \u2014 failed: ${failedNames.join(", ")}` : "");
+      setSmsLog([{
+        id: "sms" + Date.now(),
+        group: groupLabel,
+        recipients: total,
+        message: messageText,
+        units: smsUnits(messageText),
+        date: (/* @__PURE__ */ new Date()).toISOString(),
+        status
+      }, ...smsLog]);
+      if (successCount > 0) setSmsMessage("");
+    } finally {
+      setSmsSending(false);
+    }
   }
   async function sendSms() {
     if (!smsMessage.trim() || smsSending) return;
-    const groupLabel = smsGroup === "all" ? "All Parents" : classes.find((c) => c.id === smsGroup)?.name || "Class";
-    const targetPupils = smsGroup === "all" ? pupils : pupils.filter((p) => p.classId === smsGroup);
+    const groupLabel = smsGroup === "all" ? "All Parents" : smsGroup === "balances" ? "Pupils with Balance" : classes.find((c) => c.id === smsGroup)?.name || "Class";
+    const targetPupils = smsGroup === "all" ? pupils : smsGroup === "balances" ? pupils.filter((p) => balanceForPupil(p, academicYear) > 1e-3) : pupils.filter((p) => p.classId === smsGroup);
+    const messageText = smsMessage.trim();
+    if (/\{name\}|\{balance\}/.test(messageText)) {
+      return sendPersonalizedSms(targetPupils, groupLabel, messageText);
+    }
     const phoneNumbers = Array.from(new Set(
       targetPupils.map((p) => (p.parentPhone || "").trim()).filter(Boolean)
     ));
-    const messageText = smsMessage.trim();
     if (phoneNumbers.length === 0) {
       setSmsLog([{
         id: "sms" + Date.now(),
@@ -1204,6 +1362,19 @@ function DeterminedSchoolApp() {
           classId = activeClassId;
         }
         if (!classId) {
+          skipped++;
+          continue;
+        }
+        const dupName = name.trim().toLowerCase();
+        const dupDob = (dob || "").trim().toLowerCase();
+        const isDup = newPupils.some((p) => {
+          const pn = p.name.trim().toLowerCase();
+          if (pn !== dupName) return false;
+          if (p.classId === classId) return true;
+          if (dupDob && (p.dob || "").trim().toLowerCase() === dupDob) return true;
+          return false;
+        });
+        if (isDup) {
           skipped++;
           continue;
         }
@@ -1430,7 +1601,7 @@ function DeterminedSchoolApp() {
       )
     );
   }
-  const NavItem = ({ id, icon: Icon, label }) => /* @__PURE__ */ React.createElement(
+  const NavItem = ({ id, icon: Icon, label, badge }) => /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: () => setTab(id),
@@ -1452,7 +1623,8 @@ function DeterminedSchoolApp() {
       }
     },
     /* @__PURE__ */ React.createElement(Icon, { size: 17 }),
-    label
+    label,
+    badge > 0 && /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", background: RUST, color: "#fff", borderRadius: 10, fontSize: 10.5, fontWeight: 700, padding: "1px 7px" } }, badge)
   );
   const inputStyle = { padding: "7px 10px", borderRadius: 6, border: "1px solid #ccc", fontSize: 13, fontFamily: "system-ui, sans-serif" };
   const labelStyle = { fontFamily: "system-ui, sans-serif", fontSize: 12, fontWeight: 600, color: "#666", marginBottom: 6, display: "block" };
@@ -1745,7 +1917,7 @@ function DeterminedSchoolApp() {
           }
           .no-print { display: none !important; }
         }
-      `), renderCloudBanner(), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", minHeight: 640, fontFamily: "'Georgia', 'Iowan Old Style', serif", background: CREAM, borderRadius: 12, overflow: "hidden", border: "1px solid #ddd" } }, /* @__PURE__ */ React.createElement("div", { style: { width: 220, background: NAVY, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 22, paddingLeft: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { color: GOLD, fontSize: 12, letterSpacing: 1, fontFamily: "system-ui, sans-serif" } }, "DETERMINED"), /* @__PURE__ */ React.createElement("div", { style: { color: "#fff", fontSize: 17, fontWeight: 700, lineHeight: 1.2 } }, "Private School"), /* @__PURE__ */ React.createElement("div", { style: { color: "#8A93A8", fontSize: 11, marginTop: 2, fontFamily: "system-ui, sans-serif" } }, "Livingstone")), /* @__PURE__ */ React.createElement(NavItem, { id: "dashboard", icon: LayoutGrid, label: "Dashboard" }), /* @__PURE__ */ React.createElement(NavItem, { id: "setup", icon: Settings, label: "School Setup" }), /* @__PURE__ */ React.createElement(NavItem, { id: "classes", icon: GraduationCap, label: "Classes & Pupils" }), /* @__PURE__ */ React.createElement(NavItem, { id: "pupils", icon: Users, label: "Pupils" }), /* @__PURE__ */ React.createElement(NavItem, { id: "teachers", icon: UserCog, label: "Teachers" }), /* @__PURE__ */ React.createElement(NavItem, { id: "marks", icon: BookOpen, label: "Marks Entry" }), /* @__PURE__ */ React.createElement(NavItem, { id: "reports", icon: FileText, label: "Report Cards" }), /* @__PURE__ */ React.createElement(NavItem, { id: "fees", icon: Wallet, label: "Fees" }), /* @__PURE__ */ React.createElement(NavItem, { id: "sms", icon: MessageSquare, label: "SMS" }), /* @__PURE__ */ React.createElement("div", { style: { marginTop: "auto", fontFamily: "system-ui, sans-serif", fontSize: 11, color: "#6E7896", paddingLeft: 4 } }, saveStatus && /* @__PURE__ */ React.createElement("span", { style: { color: "#7CC08A" } }, saveStatus), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6 } }, academicYear, " \xB7 ", term), /* @__PURE__ */ React.createElement(
+      `), renderCloudBanner(), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", minHeight: 640, fontFamily: "'Georgia', 'Iowan Old Style', serif", background: CREAM, borderRadius: 12, overflow: "hidden", border: "1px solid #ddd" } }, /* @__PURE__ */ React.createElement("div", { style: { width: 220, background: NAVY, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 22, paddingLeft: 4 } }, /* @__PURE__ */ React.createElement("div", { style: { color: GOLD, fontSize: 12, letterSpacing: 1, fontFamily: "system-ui, sans-serif" } }, "DETERMINED"), /* @__PURE__ */ React.createElement("div", { style: { color: "#fff", fontSize: 17, fontWeight: 700, lineHeight: 1.2 } }, "Private School"), /* @__PURE__ */ React.createElement("div", { style: { color: "#8A93A8", fontSize: 11, marginTop: 2, fontFamily: "system-ui, sans-serif" } }, "Livingstone")), /* @__PURE__ */ React.createElement(NavItem, { id: "dashboard", icon: LayoutGrid, label: "Dashboard" }), /* @__PURE__ */ React.createElement(NavItem, { id: "setup", icon: Settings, label: "School Setup" }), /* @__PURE__ */ React.createElement(NavItem, { id: "classes", icon: GraduationCap, label: "Classes & Pupils" }), /* @__PURE__ */ React.createElement(NavItem, { id: "applications", icon: Inbox, label: "Applications", badge: applications.filter((a) => a.status === "pending").length }), /* @__PURE__ */ React.createElement(NavItem, { id: "pupils", icon: Users, label: "Pupils" }), /* @__PURE__ */ React.createElement(NavItem, { id: "teachers", icon: UserCog, label: "Teachers" }), /* @__PURE__ */ React.createElement(NavItem, { id: "marks", icon: BookOpen, label: "Marks Entry" }), /* @__PURE__ */ React.createElement(NavItem, { id: "reports", icon: FileText, label: "Report Cards" }), /* @__PURE__ */ React.createElement(NavItem, { id: "fees", icon: Wallet, label: "Fees" }), /* @__PURE__ */ React.createElement(NavItem, { id: "sms", icon: MessageSquare, label: "SMS" }), /* @__PURE__ */ React.createElement("div", { style: { marginTop: "auto", fontFamily: "system-ui, sans-serif", fontSize: 11, color: "#6E7896", paddingLeft: 4 } }, saveStatus && /* @__PURE__ */ React.createElement("span", { style: { color: "#7CC08A" } }, saveStatus), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6 } }, academicYear, " \xB7 ", term), /* @__PURE__ */ React.createElement(
     "div",
     {
       onClick: () => {
@@ -1914,7 +2086,35 @@ function DeterminedSchoolApp() {
     },
     /* @__PURE__ */ React.createElement(Plus, { size: 13 }),
     " Add Band"
-  )), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560, marginBottom: 20 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 } }, "Admin Login"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 12 } }, "Set the username and password used to open the app. This is a basic access gate for this device, not a full multi-user account system."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Username"), /* @__PURE__ */ React.createElement("input", { value: settings.adminUsername, onChange: (e) => setSettings({ ...settings, adminUsername: e.target.value }), style: inputStyle })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Password"), /* @__PURE__ */ React.createElement("input", { type: "password", value: settings.adminPassword, onChange: (e) => setSettings({ ...settings, adminPassword: e.target.value }), style: inputStyle })))), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 } }, "Fee Results Blocking"), /* @__PURE__ */ React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontFamily: "system-ui, sans-serif", fontSize: 13, cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: settings.resultBlocking, onChange: (e) => setSettings({ ...settings, resultBlocking: e.target.checked }) }), "Block results on the Parent Portal for pupils with an outstanding fee balance"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888" } }, "Fees and balances are now tracked under the Fees tab. This will fully take effect once the Parent Portal is built."))), tab === "classes" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { style: { color: NAVY, fontSize: 26, margin: "0 0 20px" } }, "Classes & Pupils"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 24 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 240 } }, /* @__PURE__ */ React.createElement("div", { style: labelStyle }, "CLASSES"), classes.map((c) => /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560, marginBottom: 20 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 } }, "Admin Login"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 12 } }, "Set the username and password used to open the app. This is a basic access gate for this device, not a full multi-user account system."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Username"), /* @__PURE__ */ React.createElement("input", { value: settings.adminUsername, onChange: (e) => setSettings({ ...settings, adminUsername: e.target.value }), style: inputStyle })), /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Password"), /* @__PURE__ */ React.createElement("input", { type: "password", value: settings.adminPassword, onChange: (e) => setSettings({ ...settings, adminPassword: e.target.value }), style: inputStyle })))), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 } }, "Fee Results Blocking"), /* @__PURE__ */ React.createElement("label", { style: { display: "flex", alignItems: "center", gap: 8, fontFamily: "system-ui, sans-serif", fontSize: 13, cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: settings.resultBlocking, onChange: (e) => setSettings({ ...settings, resultBlocking: e.target.checked }) }), "Block results on the Parent Portal for pupils with an outstanding fee balance"), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888" } }, "Fees and balances are now tracked under the Fees tab. This will fully take effect once the Parent Portal is built."))), tab === "applications" && /* @__PURE__ */ React.createElement("div", null,
+    /* @__PURE__ */ React.createElement("h1", { style: { color: NAVY, fontSize: 26, margin: "0 0 4px" } }, "Applications"),
+    /* @__PURE__ */ React.createElement("p", { style: { color: "#777", fontFamily: "system-ui, sans-serif", fontSize: 12.5, margin: "0 0 18px" } }, "Online applications submitted by parents through the school website, awaiting review."),
+    applications.length === 0 && /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 640, fontFamily: "system-ui, sans-serif", fontSize: 13, color: "#999" } }, "No applications submitted yet."),
+    applications.slice().sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0)).map((app) => {
+      const gradeClasses = classesForGrade(app.grade);
+      const chosenClassId = appClassChoice[app.id] || gradeClasses[0]?.id || "";
+      const statusColor = app.status === "approved" ? GREEN : app.status === "rejected" ? "#999" : app.status === "duplicate" ? RUST : GOLD;
+      const statusLabel = app.status === "approved" ? "Approved" : app.status === "rejected" ? "Rejected" : app.status === "duplicate" ? "Possible duplicate" : "Pending review";
+      return /* @__PURE__ */ React.createElement("div", { key: app.id, style: { ...cardStyle, maxWidth: 640, marginBottom: 14 } },
+        /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+          /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif" } },
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: 15, fontWeight: 700, color: NAVY } }, app.childName),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "#777", marginTop: 2 } }, app.grade || "Grade not given", " \u00B7 ", app.gender || "-", " \u00B7 DOB: ", app.dob || "-"),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "#777", marginTop: 2 } }, "Parent/Guardian: ", app.parentName || "-", " \u00B7 ", app.parentPhone || "-"),
+            app.notes && /* @__PURE__ */ React.createElement("div", { style: { fontSize: 12, color: "#999", marginTop: 2, fontStyle: "italic" } }, app.notes),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: "#aaa", marginTop: 4 } }, "Submitted ", app.submittedAt ? new Date(app.submittedAt).toLocaleString() : "-")
+          ),
+          /* @__PURE__ */ React.createElement("span", { style: { background: statusColor, color: "#fff", borderRadius: 10, fontSize: 11, fontWeight: 700, padding: "2px 10px", whiteSpace: "nowrap" } }, statusLabel)
+        ),
+        app.note && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 8, fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#7A3229" } }, app.note),
+        app.status === "pending" && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 12, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
+          gradeClasses.length > 0 ? /* @__PURE__ */ React.createElement("select", { value: chosenClassId, onChange: (e) => setAppClassChoice({ ...appClassChoice, [app.id]: e.target.value }), style: inputStyle }, gradeClasses.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, classLabel(c)))) : /* @__PURE__ */ React.createElement("span", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: RUST } }, "No class set up for ", app.grade || "this grade", " yet \u2014 create one under Classes & Pupils first."),
+          /* @__PURE__ */ React.createElement("button", { onClick: () => approveApplication(app.id, chosenClassId), disabled: !chosenClassId, style: { ...btnStyle, opacity: chosenClassId ? 1 : 0.5, background: GREEN } }, "Approve & Register"),
+          /* @__PURE__ */ React.createElement("button", { onClick: () => rejectApplication(app.id), style: { ...btnStyle, background: "#fff", color: RUST, border: `1px solid ${RUST}` } }, "Reject")
+        )
+      );
+    })
+  ), tab === "classes" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { style: { color: NAVY, fontSize: 26, margin: "0 0 20px" } }, "Classes & Pupils"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 24 } }, /* @__PURE__ */ React.createElement("div", { style: { width: 240 } }, /* @__PURE__ */ React.createElement("div", { style: labelStyle }, "CLASSES"), classes.map((c) => /* @__PURE__ */ React.createElement(
     "div",
     {
       key: c.id,
@@ -1948,8 +2148,8 @@ function DeterminedSchoolApp() {
     }
   ), /* @__PURE__ */ React.createElement("button", { onClick: addClass, style: { background: NAVY, color: "#fff", border: "none", borderRadius: 6, padding: "0 10px", cursor: "pointer" } }, /* @__PURE__ */ React.createElement(Plus, { size: 15 }))), /* @__PURE__ */ React.createElement("div", { style: { fontSize: 11, color: "#999" } }, "Creates the class under ", academicYear, "."))), /* @__PURE__ */ React.createElement("div", { style: { flex: 1 } }, /* @__PURE__ */ React.createElement("div", { style: labelStyle }, "PUPILS ENROLLED ", activeClass ? `\u2014 ${classLabel(activeClass)}, ${academicYear}` : ""), !activeClass && /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, color: "#999" } }, "Select or add a class first."), activeClass && /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 13, marginBottom: 12 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Name"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Student No."), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Gender"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Date of birth"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Parent Phone"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Fee status"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, classPupils.map((p) => {
     const bal = balanceForPupil(p, academicYear);
-    return /* @__PURE__ */ React.createElement("tr", { key: p.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, p.name), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.examNumber || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.gender || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.dob || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.parentPhone || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, bal > 1e-3 ? /* @__PURE__ */ React.createElement("span", { style: { color: RUST, fontWeight: 600 } }, "Owing ", fmtK(bal)) : /* @__PURE__ */ React.createElement("span", { style: { color: GREEN, fontWeight: 600 } }, "Paid up")), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", textAlign: "right" } }, /* @__PURE__ */ React.createElement(Trash2, { size: 14, color: "#c77", style: { cursor: "pointer" }, onClick: () => removePupil(p.id) })));
-  }))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
+    return /* @__PURE__ */ React.createElement("tr", { key: p.id, style: { borderTop: "1px solid #eee", background: editingPupilId === p.id ? "#FFF7EA" : "transparent" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, p.name), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.examNumber || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.gender || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.dob || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.parentPhone || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, bal > 1e-3 ? /* @__PURE__ */ React.createElement("span", { style: { color: RUST, fontWeight: 600 } }, "Owing ", fmtK(bal)) : /* @__PURE__ */ React.createElement("span", { style: { color: GREEN, fontWeight: 600 } }, "Paid up")), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", textAlign: "right", whiteSpace: "nowrap" } }, /* @__PURE__ */ React.createElement(Edit3, { size: 13, color: NAVY, style: { cursor: "pointer", marginRight: 12 }, onClick: () => startEditPupil(p) }), /* @__PURE__ */ React.createElement(Trash2, { size: 14, color: "#c77", style: { cursor: "pointer" }, onClick: () => removePupil(p.id) })));
+  }))), pupilDupWarning && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10, background: "#FBEAEA", border: `1px solid ${RUST}`, borderRadius: 6, padding: "8px 10px", fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#7A3229" } }, pupilDupWarning), editingPupilId && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 10, background: "#FFF7EA", border: `1px solid ${GOLD}`, borderRadius: 6, padding: "8px 10px", fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#6B4E1E" } }, "Editing ", /* @__PURE__ */ React.createElement("b", null, newPupil.name || "pupil"), " \u2014 student number stays the same."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap" } }, /* @__PURE__ */ React.createElement(
     "input",
     {
       value: newPupil.name,
@@ -1983,7 +2183,7 @@ function DeterminedSchoolApp() {
       placeholder: "Parent/Guardian phone (+260 9XX XXXXXX)",
       style: { flex: 1, minWidth: 200, ...inputStyle }
     }
-  )), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center" } }, /* @__PURE__ */ React.createElement(
     "button",
     {
       onClick: addPupil,
@@ -1991,8 +2191,15 @@ function DeterminedSchoolApp() {
       style: { ...btnStyle, marginTop: 8, opacity: newPupil.name.trim() ? 1 : 0.5 }
     },
     /* @__PURE__ */ React.createElement(Save, { size: 14 }),
-    " Save Pupil"
-  ), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999" } }, "Student number is assigned automatically on registration \u2014 next one will be ", /* @__PURE__ */ React.createElement("b", null, generateExamNumber()), ". Parents use it on the Parent Portal to look up results.")))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 28, maxWidth: 640 } }, /* @__PURE__ */ React.createElement("div", { style: labelStyle }, "SUBJECTS OFFERED AT DETERMINED PRIVATE SCHOOL"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 12 } }, "Select subjects offered at this school. Only selected subjects will appear when assigning to classes."), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, padding: "16px 20px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 24, rowGap: 10 } }, MASTER_SUBJECT_CATALOG.map((m) => /* @__PURE__ */ React.createElement("label", { key: m.name, style: { display: "flex", alignItems: "center", gap: 10, fontFamily: "system-ui, sans-serif", fontSize: 13.5, cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: subjects.includes(m.name), onChange: () => toggleMasterSubject(m.name) }), m.name, " ", /* @__PURE__ */ React.createElement("span", { style: { color: "#B0567A", fontSize: 10.5, fontWeight: 600, letterSpacing: 0.3 } }, m.code)))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 18 } }, /* @__PURE__ */ React.createElement("button", { onClick: saveSubjectsConfirm, style: btnStyle }, /* @__PURE__ */ React.createElement(Save, { size: 13 }), " Save Subjects"), /* @__PURE__ */ React.createElement("button", { onClick: selectAllMasterSubjects, style: { ...btnStyle, background: "#fff", color: NAVY, border: `1px solid #ccc` } }, "Select All"), /* @__PURE__ */ React.createElement("button", { onClick: clearAllMasterSubjects, style: { ...btnStyle, background: "#fff", color: NAVY, border: `1px solid #ccc` } }, "Clear All"))), subjects.some((s) => !MASTER_SUBJECT_CATALOG.some((m) => m.name === s)) && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { ...labelStyle, marginBottom: 8 } }, "CUSTOM SUBJECTS (not in the master list)"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, subjects.filter((s) => !MASTER_SUBJECT_CATALOG.some((m) => m.name === s)).map((s) => /* @__PURE__ */ React.createElement("span", { key: s, style: { background: SAGE, padding: "5px 10px", borderRadius: 14, fontSize: 12, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6 } }, s, /* @__PURE__ */ React.createElement(Trash2, { size: 12, color: "#c77", style: { cursor: "pointer" }, onClick: () => setSubjects(subjects.filter((x) => x !== s)) }))))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, maxWidth: 300, marginTop: 10 } }, /* @__PURE__ */ React.createElement(
+    editingPupilId ? " Save Changes" : " Save Pupil"
+  ), editingPupilId && /* @__PURE__ */ React.createElement(
+    "button",
+    {
+      onClick: cancelEditPupil,
+      style: { ...btnStyle, marginTop: 8, background: "#fff", color: NAVY, border: "1px solid #ccc" }
+    },
+    "Cancel"
+  )), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 6, fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999" } }, "Student number is assigned automatically on registration \u2014 next one will be ", /* @__PURE__ */ React.createElement("b", null, generateExamNumber()), ". Parents use it on the Parent Portal to look up results.")))), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 28, maxWidth: 640 } }, /* @__PURE__ */ React.createElement("div", { style: labelStyle }, "SUBJECTS OFFERED AT DETERMINED PRIVATE SCHOOL"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 12 } }, "Select subjects offered at this school. Only selected subjects will appear when assigning to classes."), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, padding: "16px 20px" } }, /* @__PURE__ */ React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", columnGap: 24, rowGap: 10 } }, MASTER_SUBJECT_CATALOG.map((m) => /* @__PURE__ */ React.createElement("label", { key: m.name, style: { display: "flex", alignItems: "center", gap: 10, fontFamily: "system-ui, sans-serif", fontSize: 13.5, cursor: "pointer" } }, /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: subjects.includes(m.name), onChange: () => toggleMasterSubject(m.name) }), m.name, " ", /* @__PURE__ */ React.createElement("span", { style: { color: "#B0567A", fontSize: 10.5, fontWeight: 600, letterSpacing: 0.3 } }, m.code)))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, marginTop: 18 } }, /* @__PURE__ */ React.createElement("button", { onClick: saveSubjectsConfirm, style: btnStyle }, /* @__PURE__ */ React.createElement(Save, { size: 13 }), " Save Subjects"), /* @__PURE__ */ React.createElement("button", { onClick: selectAllMasterSubjects, style: { ...btnStyle, background: "#fff", color: NAVY, border: `1px solid #ccc` } }, "Select All"), /* @__PURE__ */ React.createElement("button", { onClick: clearAllMasterSubjects, style: { ...btnStyle, background: "#fff", color: NAVY, border: `1px solid #ccc` } }, "Clear All"))), subjects.some((s) => !MASTER_SUBJECT_CATALOG.some((m) => m.name === s)) && /* @__PURE__ */ React.createElement("div", { style: { marginTop: 14 } }, /* @__PURE__ */ React.createElement("div", { style: { ...labelStyle, marginBottom: 8 } }, "CUSTOM SUBJECTS (not in the master list)"), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6 } }, subjects.filter((s) => !MASTER_SUBJECT_CATALOG.some((m) => m.name === s)).map((s) => /* @__PURE__ */ React.createElement("span", { key: s, style: { background: SAGE, padding: "5px 10px", borderRadius: 14, fontSize: 12, fontFamily: "system-ui, sans-serif", display: "flex", alignItems: "center", gap: 6 } }, s, /* @__PURE__ */ React.createElement(Trash2, { size: 12, color: "#c77", style: { cursor: "pointer" }, onClick: () => setSubjects(subjects.filter((x) => x !== s)) }))))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 6, maxWidth: 300, marginTop: 10 } }, /* @__PURE__ */ React.createElement(
     "input",
     {
       value: newSubject,
@@ -2393,7 +2600,7 @@ function DeterminedSchoolApp() {
       placeholder: "Entered by",
       style: { ...inputStyle, width: 150 }
     }
-  )), /* @__PURE__ */ React.createElement("button", { onClick: addPettyCashEntry, style: btnStyle }, /* @__PURE__ */ React.createElement(Save, { size: 13 }), " Save Entry")), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 } }, "Ledger"), /* @__PURE__ */ React.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ React.createElement("table", { style: { width: "100%", minWidth: 700, borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 12.5 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Date"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Particulars"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Category"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Income"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Expense"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Balance"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Entered By"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, /* @__PURE__ */ React.createElement("tr", { style: { borderTop: "1px solid #eee", background: SAGE } }, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "6px 8px", fontStyle: "italic", color: "#777" } }, "Balance Brought Forward"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", fontWeight: 700 } }, fmtK(parseFloat(pettyCashOpening) || 0)), /* @__PURE__ */ React.createElement("td", { colSpan: 2 })), pettyCashRows.map((e) => /* @__PURE__ */ React.createElement("tr", { key: e.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", whiteSpace: "nowrap" } }, e.date), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, e.particulars), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, e.category), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: GREEN } }, e.type === "income" ? fmtK(parseFloat(e.amount) || 0) : "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: RUST } }, e.type === "expense" ? fmtK(parseFloat(e.amount) || 0) : "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", fontWeight: 600 } }, fmtK(e.runningBalance)), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, e.enteredBy), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", textAlign: "right" } }, /* @__PURE__ */ React.createElement(Trash2, { size: 13, color: "#c77", style: { cursor: "pointer" }, onClick: () => removePettyCashEntry(e.id) })))), pettyCashRows.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 8, style: { padding: "10px 8px", color: "#999" } }, "No entries yet \u2014 add your first one above.")))))))), tab === "sms" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { style: { color: NAVY, fontSize: 26, margin: "0 0 4px" } }, "SMS Notifications"), /* @__PURE__ */ React.createElement("p", { style: { color: "#777", fontFamily: "system-ui, sans-serif", fontSize: 12.5, margin: "0 0 18px" } }, "Send bulk messages to parents and guardians."), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560, marginBottom: 20 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 12 } }, "Send Message"), /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Recipient group"), /* @__PURE__ */ React.createElement("select", { value: smsGroup, onChange: (e) => setSmsGroup(e.target.value), style: { ...inputStyle, width: "100%", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("option", { value: "all" }, "All Parents (", pupils.length, ")"), classes.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, classLabel(c), " only (", recipientCount(c.id), ")"))), /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Message"), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("button", { onClick: addPettyCashEntry, style: btnStyle }, /* @__PURE__ */ React.createElement(Save, { size: 13 }), " Save Entry")), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 } }, "Ledger"), /* @__PURE__ */ React.createElement("div", { style: { overflowX: "auto" } }, /* @__PURE__ */ React.createElement("table", { style: { width: "100%", minWidth: 700, borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 12.5 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Date"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Particulars"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Category"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Income"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Expense"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Balance"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Entered By"), /* @__PURE__ */ React.createElement("th", null))), /* @__PURE__ */ React.createElement("tbody", null, /* @__PURE__ */ React.createElement("tr", { style: { borderTop: "1px solid #eee", background: SAGE } }, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "6px 8px", fontStyle: "italic", color: "#777" } }, "Balance Brought Forward"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", fontWeight: 700 } }, fmtK(parseFloat(pettyCashOpening) || 0)), /* @__PURE__ */ React.createElement("td", { colSpan: 2 })), pettyCashRows.map((e) => /* @__PURE__ */ React.createElement("tr", { key: e.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", whiteSpace: "nowrap" } }, e.date), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, e.particulars), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, e.category), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: GREEN } }, e.type === "income" ? fmtK(parseFloat(e.amount) || 0) : "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: RUST } }, e.type === "expense" ? fmtK(parseFloat(e.amount) || 0) : "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", fontWeight: 600 } }, fmtK(e.runningBalance)), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, e.enteredBy), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", textAlign: "right" } }, /* @__PURE__ */ React.createElement(Trash2, { size: 13, color: "#c77", style: { cursor: "pointer" }, onClick: () => removePettyCashEntry(e.id) })))), pettyCashRows.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 8, style: { padding: "10px 8px", color: "#999" } }, "No entries yet \u2014 add your first one above.")))))))), tab === "sms" && /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h1", { style: { color: NAVY, fontSize: 26, margin: "0 0 4px" } }, "SMS Notifications"), /* @__PURE__ */ React.createElement("p", { style: { color: "#777", fontFamily: "system-ui, sans-serif", fontSize: 12.5, margin: "0 0 18px" } }, "Send bulk messages to parents and guardians."), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560, marginBottom: 20 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 12 } }, "Send Message"), /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Recipient group"), /* @__PURE__ */ React.createElement("select", { value: smsGroup, onChange: (e) => setSmsGroup(e.target.value), style: { ...inputStyle, width: "100%", marginBottom: 12 } }, /* @__PURE__ */ React.createElement("option", { value: "all" }, "All Parents (", pupils.length, ")"), /* @__PURE__ */ React.createElement("option", { value: "balances" }, "Pupils with Outstanding Balance (", recipientCount("balances"), ")"), classes.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, classLabel(c), " only (", recipientCount(c.id), ")"))), smsGroup === "balances" && /* @__PURE__ */ React.createElement("div", { style: { marginBottom: 12, background: "#FFF7EA", border: `1px solid ${GOLD}`, borderRadius: 6, padding: "8px 10px" } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#6B4E1E", marginBottom: 6 } }, "Use {name} and {balance} in your message and each parent gets their own child's name and exact balance filled in automatically."), /* @__PURE__ */ React.createElement("button", { onClick: fillBalanceTemplate, style: { ...btnStyle, padding: "5px 10px", fontSize: 11.5 } }, "Insert Balance Reminder Template")), /* @__PURE__ */ React.createElement("label", { style: labelStyle }, "Message"), /* @__PURE__ */ React.createElement(
     "textarea",
     {
       value: smsMessage,
@@ -2402,7 +2609,13 @@ function DeterminedSchoolApp() {
       placeholder: "e.g. Term 3 results are now available. Please visit the school office for any outstanding fee balance.",
       style: { ...inputStyle, width: "100%", resize: "vertical", boxSizing: "border-box" }
     }
-  ), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999" } }, smsMessage.length, " characters \xB7 ", smsUnits(smsMessage), " SMS unit", smsUnits(smsMessage) === 1 ? "" : "s"), /* @__PURE__ */ React.createElement("button", { onClick: sendSms, disabled: smsSending, style: { ...btnStyle, opacity: smsSending ? 0.6 : 1, cursor: smsSending ? "default" : "pointer" } }, /* @__PURE__ */ React.createElement(Send, { size: 14 }), smsSending ? " Sending\u2026" : " Send")), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10, fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#3A6B4C", background: "#EEF6EF", border: "1px solid #7CC08A", borderRadius: 6, padding: "8px 10px" } }, "Connected to Africa's Talking (Live). SMS sent from this page are real and will be delivered to parents' phones.")), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 720 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 } }, "Logs"), /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 12.5 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 11 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Date"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Group"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Recipients"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Message"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Status"))), /* @__PURE__ */ React.createElement("tbody", null, smsLog.map((s) => /* @__PURE__ */ React.createElement("tr", { key: s.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", whiteSpace: "nowrap", color: "#777" } }, new Date(s.date).toLocaleString()), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, s.group), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, s.recipients), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", maxWidth: 260 } }, s.message), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#B8860B" } }, s.status))), smsLog.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "10px 8px", color: "#999" } }, "No messages sent yet.")))))))), renderReceiptModal());
+  ), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 } }, /* @__PURE__ */ React.createElement("span", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999" } }, smsMessage.length, " characters \xB7 ", smsUnits(smsMessage), " SMS unit", smsUnits(smsMessage) === 1 ? "" : "s"), /* @__PURE__ */ React.createElement("button", { onClick: sendSms, disabled: smsSending, style: { ...btnStyle, opacity: smsSending ? 0.6 : 1, cursor: smsSending ? "default" : "pointer" } }, /* @__PURE__ */ React.createElement(Send, { size: 14 }), smsSending ? " Sending\u2026" : " Send")), /* @__PURE__ */ React.createElement("div", { style: { marginTop: 10, fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#3A6B4C", background: "#EEF6EF", border: "1px solid #7CC08A", borderRadius: 6, padding: "8px 10px" } }, "Connected to Africa's Talking (Live). SMS sent from this page are real and will be delivered to parents' phones.")), /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 720 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 10 } }, "Logs"), /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 12.5 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 11 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Date"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Group"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Recipients"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Message"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Status"))), /* @__PURE__ */ React.createElement("tbody", null, smsLog.map((s) => {
+  const failed = s.status.startsWith("Failed");
+  const partial = /Sent to \d+\/\d+/.test(s.status) && !/^Sent to (\d+) parent/.test(s.status);
+  const badgeColor = failed ? RUST : partial ? "#B8860B" : GREEN;
+  const badgeLabel = failed ? "Not sent" : partial ? "Partially sent" : "Sent";
+  return /* @__PURE__ */ React.createElement("tr", { key: s.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", whiteSpace: "nowrap", color: "#777" } }, new Date(s.date).toLocaleString()), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, s.group), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, s.recipients), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", maxWidth: 260 } }, s.message), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, /* @__PURE__ */ React.createElement("span", { style: { display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 700, color: "#fff", background: badgeColor, marginRight: 6 } }, badgeLabel), /* @__PURE__ */ React.createElement("span", { style: { fontSize: 11.5, color: "#888" } }, s.status)));
+}), smsLog.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "10px 8px", color: "#999" } }, "No messages sent yet.")))))))), renderReceiptModal());
 }
 const _root = ReactDOM.createRoot(document.getElementById("root"));
 _root.render(React.createElement(DeterminedSchoolApp));
