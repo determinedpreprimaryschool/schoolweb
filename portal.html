@@ -1020,6 +1020,9 @@ function DeterminedSchoolApp() {
   const [csvSummary, setCsvSummary] = useState(null);
   const csvInputRef = useRef(null);
   const [templateClassId, setTemplateClassId] = useState("");
+  const [csvTargetClassId, setCsvTargetClassId] = useState("");
+  const [pupilClassFilter, setPupilClassFilter] = useState("");
+  const [bulkMoveClassId, setBulkMoveClassId] = useState("");
   const [feeCsvSummary, setFeeCsvSummary] = useState(null);
   const feeCsvInputRef = useRef(null);
   const [feeTemplateClassId, setFeeTemplateClassId] = useState("");
@@ -2051,11 +2054,47 @@ function DeterminedSchoolApp() {
   function removeLoad(id) {
     setSubjectLoads(subjectLoads.filter((l) => l.id !== id));
   }
+  const unplacedPupils = useMemo(() => pupils.filter((p) => {
+    const c = classes.find((x) => x.id === p.classId);
+    return !c || !c.grade;
+  }), [pupils, classes]);
   const filteredGlobalPupils = useMemo(() => {
     const q = globalPupilSearch.trim().toLowerCase();
-    if (!q) return pupils;
-    return pupils.filter((p) => p.name.toLowerCase().includes(q) || (p.examNumber || "").toLowerCase().includes(q));
-  }, [pupils, globalPupilSearch]);
+    let list = pupils;
+    if (pupilClassFilter === "__unplaced") list = unplacedPupils;
+    else if (pupilClassFilter) list = pupils.filter((p) => p.classId === pupilClassFilter);
+    if (!q) return list;
+    return list.filter((p) => p.name.toLowerCase().includes(q) || (p.examNumber || "").toLowerCase().includes(q));
+  }, [pupils, globalPupilSearch, pupilClassFilter, unplacedPupils]);
+  function movePupilsToClass(ids, classId) {
+    if (!classId || !ids.length) return;
+    const set = new Set(ids);
+    setPupils(pupils.map((p) => set.has(p.id) ? { ...p, classId } : p));
+  }
+  function setClassGrade(classId, grade) {
+    setClasses(classes.map((c) => c.id === classId ? { ...c, grade } : c));
+  }
+  function classKey(s) {
+    let t = String(s || "").toLowerCase().replace(/grade|gr\b/g, "g").replace(/level|lvl|ece|reception|baby class/g, "e").replace(/[^a-z0-9]/g, "");
+    t = t.replace(/^l(\d)/, "e$1");
+    return t;
+  }
+  function findClassByText(text, classList) {
+    const k = classKey(text);
+    if (!k) return null;
+    const same = (c) => classKey(c.name) === k || classKey(classLabel(c)) === k || classKey((c.grade || "") + (c.name || "")) === k;
+    let hit = classList.find((c) => c.grade && same(c));
+    if (hit) return hit;
+    const byGrade = classList.filter((c) => c.grade && classKey(c.grade) === k);
+    if (byGrade.length === 1) return byGrade[0];
+    return classList.find((c) => same(c)) || null;
+  }
+  function guessGrade(text) {
+    const k = classKey(text);
+    let best = "";
+    GRADES.forEach((g) => { const gk = classKey(g); if (k.startsWith(gk) && gk.length > best.length) best = g; });
+    return best;
+  }
   const duplicateExamNumbers = useMemo(() => {
     const counts = {};
     pupils.forEach((p) => {
@@ -2125,13 +2164,20 @@ function DeterminedSchoolApp() {
           continue;
         }
         let classId = "";
-        if (className && className.trim()) {
-          const want = className.trim().toLowerCase();
-          const existing = newClasses.find((c) => c.name.toLowerCase() === want || classLabel(c).toLowerCase() === want);
+        if (csvTargetClassId) {
+          classId = csvTargetClassId;
+        } else if (className && className.trim()) {
+          const existing = findClassByText(className, newClasses);
           if (existing) classId = existing.id;
           else {
             const id = "c" + Date.now() + Math.floor(Math.random() * 1e4);
-            newClasses.push({ id, name: className.trim() });
+            const grade = guessGrade(className);
+            let rest = className.trim();
+            if (grade) {
+              const m = rest.match(/([A-Za-z])\s*$/);
+              rest = m && classKey(rest) !== classKey(grade) ? m[1].toUpperCase() : "A";
+            }
+            newClasses.push(grade ? { id, grade, name: rest } : { id, name: className.trim() });
             classId = id;
           }
         } else if (activeClassId) {
@@ -3589,7 +3635,7 @@ function DeterminedSchoolApp() {
         fontSize: 13
       }
     },
-    /* @__PURE__ */ React.createElement("span", null, classLabel(c)),
+    /* @__PURE__ */ React.createElement("span", null, classLabel(c), !c.grade && React.createElement("select", { value: "", onClick: (e) => e.stopPropagation(), onChange: (e) => setClassGrade(c.id, e.target.value), style: { marginLeft: 6, fontSize: 11, color: RUST, border: `1px solid ${RUST}`, borderRadius: 4 } }, React.createElement("option", { value: "" }, "Set grade"), GRADES.map((g) => React.createElement("option", { key: g, value: g }, g))), " ", React.createElement("span", { style: { color: "#999", fontSize: 11 } }, `(${pupils.filter((p) => p.classId === c.id).length})`)),
     /* @__PURE__ */ React.createElement(Trash2, { size: 14, color: "#c77", onClick: (e) => {
       e.stopPropagation();
       removeClass(c.id);
@@ -3680,7 +3726,7 @@ function DeterminedSchoolApp() {
       style: { ...btnStyle, background: pupilsTabView === id ? NAVY : "#fff", color: pupilsTabView === id ? "#fff" : NAVY, border: `1px solid ${NAVY}` }
     },
     label
-  ))), pupilsTabView === "list" && /* @__PURE__ */ React.createElement("div", { style: cardStyle }, /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 } }, /* @__PURE__ */ React.createElement(Search, { size: 15, color: "#999" }), /* @__PURE__ */ React.createElement(
+  ))), pupilsTabView === "list" && /* @__PURE__ */ React.createElement("div", { style: cardStyle }, unplacedPupils.length > 0 && React.createElement("div", { style: { background: "#fdecea", border: `1px solid ${RUST}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontFamily: "system-ui, sans-serif", fontSize: 13, color: "#333" } }, React.createElement("b", null, `${unplacedPupils.length} pupil${unplacedPupils.length === 1 ? " is" : "s are"} not in a proper class`), " (their class is missing or has no grade, so they don't show under Classes). ", React.createElement("a", { href: "#", onClick: (e) => { e.preventDefault(); setPupilClassFilter("__unplaced"); }, style: { color: NAVY, fontWeight: 600 } }, "Show them"), " and move them to the right class below."), React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10, fontFamily: "system-ui, sans-serif", fontSize: 12.5 } }, React.createElement("select", { value: pupilClassFilter, onChange: (e) => setPupilClassFilter(e.target.value), style: { ...inputStyle, minWidth: 200 } }, React.createElement("option", { value: "" }, "All classes"), React.createElement("option", { value: "__unplaced" }, `Not in a proper class (${unplacedPupils.length})`), classes.map((c) => React.createElement("option", { key: c.id, value: c.id }, classLabelWithCount(c)))), pupilClassFilter && filteredGlobalPupils.length > 0 && React.createElement(React.Fragment, null, React.createElement("span", null, `Move all ${filteredGlobalPupils.length} shown to:`), React.createElement("select", { value: bulkMoveClassId, onChange: (e) => setBulkMoveClassId(e.target.value), style: { ...inputStyle, minWidth: 180 } }, React.createElement("option", { value: "" }, "Choose class"), classes.filter((c) => c.grade).map((c) => React.createElement("option", { key: c.id, value: c.id }, classLabel(c)))), React.createElement("button", { onClick: () => { movePupilsToClass(filteredGlobalPupils.map((p) => p.id), bulkMoveClassId); setBulkMoveClassId(""); }, disabled: !bulkMoveClassId, style: { ...btnStyle, opacity: bulkMoveClassId ? 1 : 0.5 } }, "Move"))), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 14 } }, /* @__PURE__ */ React.createElement(Search, { size: 15, color: "#999" }), /* @__PURE__ */ React.createElement(
     "input",
     {
       value: globalPupilSearch,
@@ -3688,7 +3734,14 @@ function DeterminedSchoolApp() {
       placeholder: "Search by name or student number",
       style: { flex: 1, ...inputStyle }
     }
-  )), /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 13 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Name"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Student / Exam No."), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Class"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Gender"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "DOB"))), /* @__PURE__ */ React.createElement("tbody", null, filteredGlobalPupils.map((p) => /* @__PURE__ */ React.createElement("tr", { key: p.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, p.name), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.examNumber || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, classes.find((c) => c.id === p.classId)?.name || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.gender || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.dob || "-"))), filteredGlobalPupils.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "10px 8px", color: "#999" } }, "No pupils found."))))), pupilsTabView === "csv" && /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 } }, "Step 1 \u2014 Download the template"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 10 } }, "Pick a grade/class and download its blank registration sheet. Give this file to the teacher for that grade \u2014 it already has the correct column headings and the class name filled in, so nothing gets mismatched when it's uploaded back."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("select", { value: templateClassId, onChange: (e) => setTemplateClassId(e.target.value), style: { ...inputStyle, minWidth: 200 } }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All grades (blank Class column)"), classes.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, classLabelWithCount(c)))), /* @__PURE__ */ React.createElement("button", { onClick: downloadPupilTemplate, style: btnStyle }, /* @__PURE__ */ React.createElement(Download, { size: 14 }), " Download Template")), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999", marginBottom: 20 } }, "No class listed yet? Create it first under Classes, then come back here."), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4, borderTop: "1px solid #eee", paddingTop: 16 } }, "Step 2 \u2014 Upload the completed sheet"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 14 } }, "Once the teacher has filled it in and saved it as CSV, upload it here. Columns must stay in this order: Name, Student Number, Gender, Date of Birth, Class, Parent Phone. Leave Student Number blank \u2014 it's assigned automatically. A class name that doesn't exist yet will be created automatically. Rows with a duplicate student number are skipped."), /* @__PURE__ */ React.createElement(
+  )), /* @__PURE__ */ React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: "system-ui, sans-serif", fontSize: 13 } }, /* @__PURE__ */ React.createElement("thead", null, /* @__PURE__ */ React.createElement("tr", { style: { textAlign: "left", color: "#888", fontSize: 12 } }, /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Name"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Student / Exam No."), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Class"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "Gender"), /* @__PURE__ */ React.createElement("th", { style: { padding: "4px 8px" } }, "DOB"))), /* @__PURE__ */ React.createElement("tbody", null, filteredGlobalPupils.map((p) => /* @__PURE__ */ React.createElement("tr", { key: p.id, style: { borderTop: "1px solid #eee" } }, /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px" } }, p.name), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.examNumber || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "4px 8px", color: "#777" } }, (() => { const pc = classes.find((c) => c.id === p.classId); const bad = !pc || !pc.grade; return React.createElement("select", { value: pc ? pc.id : "", onChange: (e) => movePupilsToClass([p.id], e.target.value), style: { ...inputStyle, padding: "3px 6px", fontSize: 12, borderColor: bad ? RUST : "#ddd", color: bad ? RUST : "#555", maxWidth: 170 } }, !pc && React.createElement("option", { value: "" }, "No class"), classes.map((c) => React.createElement("option", { key: c.id, value: c.id }, classLabel(c) + (c.grade ? "" : " (no grade)")))); })()), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.gender || "-"), /* @__PURE__ */ React.createElement("td", { style: { padding: "6px 8px", color: "#777" } }, p.dob || "-"))), filteredGlobalPupils.length === 0 && /* @__PURE__ */ React.createElement("tr", null, /* @__PURE__ */ React.createElement("td", { colSpan: 5, style: { padding: "10px 8px", color: "#999" } }, "No pupils found."))))), pupilsTabView === "csv" && /* @__PURE__ */ React.createElement("div", { style: { ...cardStyle, maxWidth: 560 } }, /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 } }, "Step 1 \u2014 Download the template"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 10 } }, "Pick a grade/class and download its blank registration sheet. Give this file to the teacher for that grade \u2014 it already has the correct column headings and the class name filled in, so nothing gets mismatched when it's uploaded back."), /* @__PURE__ */ React.createElement("div", { style: { display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 } }, /* @__PURE__ */ React.createElement("select", { value: templateClassId, onChange: (e) => setTemplateClassId(e.target.value), style: { ...inputStyle, minWidth: 200 } }, /* @__PURE__ */ React.createElement("option", { value: "" }, "All grades (blank Class column)"), classes.map((c) => /* @__PURE__ */ React.createElement("option", { key: c.id, value: c.id }, classLabelWithCount(c)))), /* @__PURE__ */ React.createElement("button", { onClick: downloadPupilTemplate, style: btnStyle }, /* @__PURE__ */ React.createElement(Download, { size: 14 }), " Download Template")), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 11.5, color: "#999", marginBottom: 20 } }, "No class listed yet? Create it first under Classes, then come back here."), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4, borderTop: "1px solid #eee", paddingTop: 16 } }, "Step 2 \u2014 Upload the completed sheet"), /* @__PURE__ */ React.createElement("div", { style: { fontFamily: "system-ui, sans-serif", fontSize: 12, color: "#888", marginBottom: 14 } }, "Once the teacher has filled it in and saved it as CSV, upload it here. Columns must stay in this order: Name, Student Number, Gender, Date of Birth, Class, Parent Phone. Leave Student Number blank \u2014 it's assigned automatically. A class name that doesn't exist yet will be created automatically. Rows with a duplicate student number are skipped."), /* @__PURE__ */ React.createElement(
+    "div",
+    { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 10, fontFamily: "system-ui, sans-serif", fontSize: 12.5 } },
+    React.createElement("span", { style: { color: NAVY, fontWeight: 600 } }, "Put the pupils in:"),
+    React.createElement("select", { value: csvTargetClassId, onChange: (e) => setCsvTargetClassId(e.target.value), style: { ...inputStyle, minWidth: 220 } },
+      React.createElement("option", { value: "" }, "The class written in the file"),
+      classes.map((c) => React.createElement("option", { key: c.id, value: c.id }, classLabel(c))))
+  ), /* @__PURE__ */ React.createElement(
     "input",
     {
       ref: csvInputRef,
